@@ -58,6 +58,7 @@ void directory_listing(int client_socket, const char *path) {
         }
         close(pipefd[0]);
         wait(NULL);
+
         send_response(client_socket, "200 OK", "text/plain", listing);
     }
 
@@ -90,13 +91,22 @@ void serve_file(int client_socket, const char *path) {
             content_type = "image/gif";
         }
     }
+    char header[BUFFER_SIZE];
+    snprintf(header, sizeof(header),
+             "HTTP/1.1 200 OK\r\n"
+             "Content-Type: %s\r\n"
+             "Content-Length: %ld\r\n"
+             "\r\n",
+             content_type, file_stat.st_size);
+    send(client_socket, header, strlen(header), 0);
 
-    char *file_content = malloc(file_stat.st_size);
-    fread(file_content, file_stat.st_size, 1, file);
+    char buffer[BUFFER_SIZE];
+    size_t bytes_read;
+    while ((bytes_read = fread(buffer, 1, sizeof(buffer), file)) > 0) {
+        send(client_socket, buffer, bytes_read, 0);
+    }
+
     fclose(file);
-
-    send_response(client_socket, "200 OK", content_type, file_content);
-    free(file_content);
 }
 
 void handle_request(int client_socket){
