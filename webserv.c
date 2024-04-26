@@ -65,7 +65,44 @@ void directory_listing(int client_socket, const char *path) {
 
 }
 
+void execute_script(int client_socket,const char *path ){
+    int pipefd[2];
+    
+    if(pipe(pipefd) == -1){
+        perror("pipe");
+        send_response(client_socket,"500 Internal Server Error","text/plain","Failed to create pipe");
+    }
+
+    pid_t pid = fork();
+    if (pid == -1){
+        perror("fork");
+        send_response(client_socket, "500 Internal Server Error", "text/plain", "Failed to fork process");
+        return;
+    }else if(pid == 0){
+        close(pipefd[0]);
+        dup2(pipefd[1],STDOUT_FILENO);
+        close(pipefd[1]);
+        execl("/bin/sh","sh",path,NULL);
+        perror("execl");
+        exit(1);
+    }else{
+        // Parent process
+        close(pipefd[1]);
+        char output[BUFFER_SIZE] = "";
+        char buffer[BUFFER_SIZE];
+        ssize_t bytes_read;
+        while ((bytes_read = read(pipefd[0], buffer, sizeof(buffer))) > 0) {
+            strncat(output, buffer, bytes_read);
+        }
+        close(pipefd[0]);
+        wait(NULL);
+
+        send_response(client_socket, "200 OK", "text/plain", output);
+    }
+}
+
 void serve_file(int client_socket, const char *path) {
+    //printf("%s\n",path);
     FILE *file = fopen(path, "rb");
     //Will check if file exist
     if (file == NULL) {
@@ -89,6 +126,8 @@ void serve_file(int client_socket, const char *path) {
             content_type = "image/jpeg";
         } else if (strcmp(file_extension, ".gif") == 0) {
             content_type = "image/gif";
+        } else if (strcmp(file_extension,".cgi") == 0){
+            execute_script(client_socket,path);
         }
     }
     char header[BUFFER_SIZE];
