@@ -66,11 +66,33 @@ void directory_listing(int client_socket, const char *path) {
 }
 
 void execute_script(int client_socket,const char *path ){
+    
+    char script_path[BUFFER_SIZE];
+    FILE *script_file = fopen(path,"rb");
+    if (script_file == NULL){
+        send_response(client_socket, "404 Not Found", "text/plain", "File not found");
+        return;
+    }
+    char shebang[BUFFER_SIZE];
+    //Gets the shebang of the cgi file to determine the interpreter
+    fgets(shebang,sizeof(shebang),script_file);
+    fclose(script_file);
+    char interpreter[BUFFER_SIZE];
+    if (strstr(shebang,"#!/usr/bin/python") != NULL){
+        strcpy(interpreter,"/usr/bin/python3");
+    }else if (strstr(shebang,"#!/bin/sh") != NULL){
+        strcpy(interpreter,"/bin/sh");
+    }else{ 
+        send_response(client_socket, "500 Internal Server Error", "text/plain", "Failed to read script");
+        return; 
+    }
+
     int pipefd[2];
     
     if(pipe(pipefd) == -1){
         perror("pipe");
         send_response(client_socket,"500 Internal Server Error","text/plain","Failed to create pipe");
+        return;
     }
 
     pid_t pid = fork();
@@ -82,7 +104,7 @@ void execute_script(int client_socket,const char *path ){
         close(pipefd[0]);
         dup2(pipefd[1],STDOUT_FILENO);
         close(pipefd[1]);
-        execl("/bin/sh","sh",path,NULL);
+        execl(interpreter, interpreter, path, NULL);
         perror("execl");
         exit(1);
     }else{
@@ -90,7 +112,7 @@ void execute_script(int client_socket,const char *path ){
         close(pipefd[1]);
         char output[BUFFER_SIZE] = "";
         char buffer[BUFFER_SIZE];
-        ssize_t bytes_read;
+        long long bytes_read;
         while ((bytes_read = read(pipefd[0], buffer, sizeof(buffer))) > 0) {
             strncat(output, buffer, bytes_read);
         }
@@ -140,7 +162,7 @@ void serve_file(int client_socket, const char *path) {
     send(client_socket, header, strlen(header), 0);
 
     char buffer[BUFFER_SIZE];
-    size_t bytes_read;
+    long long bytes_read;
     while ((bytes_read = fread(buffer, 1, sizeof(buffer), file)) > 0) {
         send(client_socket, buffer, bytes_read, 0);
     }
