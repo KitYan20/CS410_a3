@@ -118,8 +118,11 @@ void execute_script(int client_socket,const char *path ){
         }
         close(pipefd[0]);
         wait(NULL);
-
-        send_response(client_socket, "200 OK", "text/plain", output);
+        if (strcmp(interpreter,"/usr/bin/python3") == 0){
+            send_response(client_socket, "200 OK", "text/html", output);
+        }else{
+            send_response(client_socket, "200 OK", "text/plain", output);
+        }
     }
 }
 

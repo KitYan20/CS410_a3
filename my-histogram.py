@@ -1,7 +1,9 @@
 #!/usr/bin/python
-
 import os
 import sys
+import matplotlib.pyplot as plt
+import base64
+import io
 
 def count_file_types(directory):
     file_types = {
@@ -34,33 +36,33 @@ def count_file_types(directory):
 
     return file_types
 
-def generate_gnuplot_commands(file_types):
-    gnuplot_commands = """
-    set term png
-    set output "/dev/stdout"
-    set style data histogram
-    set style fill solid
-    set boxwidth 0.8
-    set xtic rotate by -45
-    set xlabel "File Types"
-    set ylabel "Frequency"
-    plot "-" using 2:xtic(1) title "" with boxes
-    """
+def generate_histogram(file_types):
+    labels = list(file_types.keys())
+    counts = list(file_types.values())
 
-    for file_type, count in file_types.items():
-        gnuplot_commands += f'"{file_type}" {count}\n'
+    fig, ax = plt.subplots()
+    ax.bar(labels, counts)
+    ax.set_xlabel("File Types")
+    ax.set_ylabel("Frequency")
+    ax.set_title("File Type Histogram")
+    plt.xticks(rotation=45)
+    plt.tight_layout()
 
-    gnuplot_commands += "e"
+    # buffer = io.BytesIO()
+    # plt.savefig(buffer, format='png')
+    # buffer.seek(0)
 
-    return gnuplot_commands
-
+    # image_base64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
+    # return image_base64
+    plt.savefig("histogram.jpg")
 if __name__ == "__main__":
     if len(sys.argv) != 2:
-        print("Usage: my-histogram <directory>")
+        print("Usage: my-histogram.py <directory>")
         sys.exit(1)
 
     directory = sys.argv[1]
-    file_types = count_file_types(directory)
-    gnuplot_commands = generate_gnuplot_commands(file_types)
 
-    print(gnuplot_commands)
+    file_types = count_file_types(directory)
+    generate_histogram(file_types)
+
+    #print(histogram_base64)
