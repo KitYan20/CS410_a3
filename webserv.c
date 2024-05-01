@@ -65,8 +65,7 @@ void directory_listing(int client_socket, const char *path) {
 
 }
 
-void execute_script(int client_socket,const char *path ){
-    
+void execute_script(int client_socket,const char *path,char qargs[][BUFFER_SIZE],int length){
     char script_path[BUFFER_SIZE];
     FILE *script_file = fopen(path,"rb");
     if (script_file == NULL){
@@ -104,7 +103,7 @@ void execute_script(int client_socket,const char *path ){
         close(pipefd[0]);
         dup2(pipefd[1],STDOUT_FILENO);
         close(pipefd[1]);
-        execl(interpreter, interpreter, path, NULL);
+        execl(interpreter, interpreter, path,qargs[1], NULL);
         perror("execl");
         exit(1);
     }else{
@@ -126,8 +125,34 @@ void execute_script(int client_socket,const char *path ){
     }
 }
 
-void serve_file(int client_socket, const char *path) {
-    //printf("%s\n",path);
+void send_file_content(int client_socket, const char *content_type, long file_size, FILE *file) {
+    char header[BUFFER_SIZE];
+    snprintf(header, sizeof(header),
+             "HTTP/1.1 200 OK\r\n"
+             "Content-Type: %s\r\n"
+             "Content-Length: %ld\r\n"
+             "\r\n",
+             content_type, file_size);
+    send(client_socket, header, strlen(header), 0);
+
+    char buffer[BUFFER_SIZE];
+    long long bytes_read;
+    while ((bytes_read = fread(buffer, 1, sizeof(buffer), file)) > 0) {
+        send(client_socket, buffer, bytes_read, 0);
+    }
+}
+
+void serve_file(int client_socket, const char *path,char *query) {
+
+    char *string= strtok(query,"&");
+    char *token = strtok(string,"=");
+    char qargs[BUFFER_SIZE][BUFFER_SIZE];
+    int i = 0;
+    while( token != NULL ) {
+        strcpy(qargs[i], token);  // copy token to the string array
+        i++;
+        token = strtok(NULL, " ");      
+   }
     FILE *file = fopen(path, "rb");
     //Will check if file exist
     if (file == NULL) {
@@ -152,24 +177,12 @@ void serve_file(int client_socket, const char *path) {
         } else if (strcmp(file_extension, ".gif") == 0) {
             content_type = "image/gif";
         } else if (strcmp(file_extension,".cgi") == 0){
-            execute_script(client_socket,path);
+            execute_script(client_socket,path,qargs,i);
+            return;
         }
     }
-    char header[BUFFER_SIZE];
-    snprintf(header, sizeof(header),
-             "HTTP/1.1 200 OK\r\n"
-             "Content-Type: %s\r\n"
-             "Content-Length: %ld\r\n"
-             "\r\n",
-             content_type, file_stat.st_size);
-    send(client_socket, header, strlen(header), 0);
 
-    char buffer[BUFFER_SIZE];
-    long long bytes_read;
-    while ((bytes_read = fread(buffer, 1, sizeof(buffer), file)) > 0) {
-        send(client_socket, buffer, bytes_read, 0);
-    }
-
+    send_file_content(client_socket, content_type, file_stat.st_size, file);
     fclose(file);
 }
 
@@ -184,12 +197,14 @@ void handle_request(int client_socket){
     // Parse the request and extract the path
     char *method = strtok(request, " ");
     char *path = strtok(NULL, " ");
+    char *arguments = strtok(path, "?");
+    char *query = strtok(NULL,"");
 
     if (path != NULL && strcmp(method,"GET") == 0){
         if (strcmp(path, "/") == 0 || path[strlen(path) - 1] == '/') {
                 directory_listing(client_socket, ".");
         } else {
-                serve_file(client_socket, path + 1);
+                serve_file(client_socket, path + 1,query);
         }
     }else{
         send_response(client_socket, "400 Bad Request", "text/plain", "Bad Request");

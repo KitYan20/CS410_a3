@@ -2,8 +2,6 @@
 import os
 import sys
 import matplotlib.pyplot as plt
-import base64
-import io
 
 def count_file_types(directory):
     file_types = {
@@ -48,21 +46,12 @@ def generate_histogram(file_types):
     plt.xticks(rotation=45)
     plt.tight_layout()
 
-    # buffer = io.BytesIO()
-    # plt.savefig(buffer, format='png')
-    # buffer.seek(0)
-
-    # image_base64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
-    # return image_base64
     plt.savefig("histogram.jpg")
 if __name__ == "__main__":
     if len(sys.argv) != 2:
         print("Usage: my-histogram.py <directory>")
         sys.exit(1)
-
     directory = sys.argv[1]
 
     file_types = count_file_types(directory)
     generate_histogram(file_types)
-
-    #print(histogram_base64)
