@@ -185,7 +185,9 @@ void serve_file(int client_socket, const char *path,char *query) {
     send_file_content(client_socket, content_type, file_stat.st_size, file);
     fclose(file);
 }
-
+void handle_arduino_request(int client_socket){
+    send_response(client_socket,"200 OK","text/plain", "This is handling arduino");
+}
 void handle_request(int client_socket){
     FILE *fpin;
     char request[1024];
@@ -203,8 +205,10 @@ void handle_request(int client_socket){
     if (path != NULL && strcmp(method,"GET") == 0){
         if (strcmp(path, "/") == 0 || path[strlen(path) - 1] == '/') {
                 directory_listing(client_socket, ".");
-        } else {
-                serve_file(client_socket, path + 1,query);
+        }else if (strcmp(path,"/start") == 0){
+            handle_arduino_request(client_socket);
+        }else{
+            serve_file(client_socket, path + 1,query);
         }
     }else{
         send_response(client_socket, "400 Bad Request", "text/plain", "Bad Request");
