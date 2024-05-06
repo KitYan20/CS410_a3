@@ -45,3 +45,10 @@ http:IP Address:8080/histogram.cgi?directory=. <--(Replace "." to change the dir
 Specifically for request a dynamically image, it would run the python program "my-histogram.py" which will traverse through a directory to list the different types of files in that directory taking a directory as an argument from the client and would parse through the url to get the directory. What histogram.cgi would do is to run a subprocess to execute the "my-histogram.py" program which will create a jpg histogram of the list of files in the directory. Then, it will just have print statements of HTML code which the server will send it back as HTML code to render on the client side to view.
 
 ### Physical Computing
+
+#### Testing the Arduino Hardware
+Our game is called the Tapping Game where the primary goal is to turn on all the lights under 60 seconds. After the game is over, you will recieve a score back from Arduino to indicate how many rounds you got up to under 60 seconds. To start the game on the Webserver, you run this command on the web:
+```
+http:IP Address:8080/start
+```
+There will be a timer to indicate how many seconds you have left on time before the game is over.
