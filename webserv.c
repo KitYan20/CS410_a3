@@ -10,6 +10,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <fcntl.h>
+#include <termios.h>
+#include <sys/ioctl.h>
+
+
+
+//#include <windows.h>
 
 #define BUFFER_SIZE 1024
 
@@ -185,9 +192,117 @@ void serve_file(int client_socket, const char *path,char *query) {
     send_file_content(client_socket, content_type, file_stat.st_size, file);
     fclose(file);
 }
-void handle_arduino_request(int client_socket){
-    send_response(client_socket,"200 OK","text/plain", "This is handling arduino");
+
+void handle_arduino_request(int client_socket) {
+  // Send an initial response to the client with the start button
+  const char *initial_response = "<html><body>"
+                                 "<h1>Welcome to the Game!</h1>"
+                                 "<p>Click the button below to start the game.</p>"
+                                 "<form action='/start' method='POST'>"
+                                 "<input type='submit' value='Start Game'>"
+                                 "</form>"
+                                 "</body></html>";
+  send_response(client_socket, "200 OK", "text/html", initial_response);
+
+  // Wait for the start button to be clicked
+  FILE *fpin;
+  char request[1024];
+  fpin = fdopen(client_socket, "r");
+  fgets(request, 1024, fpin);
+  printf("Got a call: request = %s\n", request);
+
+  // Check if the start button was clicked
+  if (strstr(request, "POST /start") != NULL) {
+    // Send the game started response
+    const char *game_started_response = "<html><body>"
+                                        "<h1>Game Started</h1>"
+                                        "<p>Time remaining: <span id='timer'>60</span> seconds</p>"
+                                        "<script>"
+                                        "  var timeLeft = 60;"
+                                        "  var timer = setInterval(function() {"
+                                        "    timeLeft--;"
+                                        "    document.getElementById('timer').textContent = timeLeft;"
+                                        "    if (timeLeft <= 0) {"
+                                        "      clearInterval(timer);"
+                                        "      document.getElementById('timer').textContent = 'Time\'s up!';"
+                                        "      window.location.href = '/game-over';"
+                                        "    }"
+                                        "  }, 1000);"
+                                        "</script>"
+                                        "</body></html>";
+    send_response(client_socket, "200 OK", "text/html", game_started_response);
+
+    // Define the Python script
+    const char *python_script = "import serial\n"
+                                "import time\n"
+                                "\n"
+                                "arduino = serial.Serial('/dev/ttyACM0', 9600)\n"
+                                "time.sleep(2)  # Wait for the Arduino to initialize\n"
+                                "\n"
+                                "arduino.write(b'start\\n')  # Send the 'start' message\n"
+                                "\n"
+                                "start_time = time.time()\n"
+                                "score = '0'\n"
+                                "while (time.time() - start_time) < 60:\n"
+                                "    if arduino.in_waiting > 0:\n"
+                                "        score = arduino.readline().decode('utf-8').strip()  # Read the score\n"
+                                "print(score)\n"
+                                "\n"
+                                "arduino.close()\n";
+
+    // Create a temporary file to store the Python script
+    FILE *temp_file = fopen("temp_script.py", "w");
+    if (temp_file == NULL) {
+      printf("Error creating temporary file\n");
+      return;
+    }
+
+    // Write the Python script to the temporary file
+    fprintf(temp_file, "%s", python_script);
+    fclose(temp_file);
+
+    // Execute the Python script and capture the output
+    char command[256];
+    sprintf(command, "python3 temp_script.py");
+    FILE *pipe = popen(command, "r");
+    if (pipe == NULL) {
+      printf("Error executing Python script\n");
+      remove("temp_script.py");
+      return;
+    }
+
+    // Read the score from the Python script output
+    char score_str[16];
+    if (fgets(score_str, sizeof(score_str), pipe) != NULL) {
+      int score = atoi(score_str);
+      printf("Received score from Arduino: %d\n", score);
+
+      // Send the game over response with the score
+      char game_over_response[1024];
+      snprintf(game_over_response, sizeof(game_over_response),
+               "<html><body>"
+               "<h1>Game Over</h1>"
+               "<p>Your score: %d</p>"
+               "<form action='/' method='GET'>"
+               "<input type='submit' value='Play Again'>"
+               "</form>"
+               "</body></html>",
+               score);
+      send_response(client_socket, "200 OK", "text/html", game_over_response);
+    } else {
+      printf("Error reading score from Python script output\n");
+    }
+
+    // Close the pipe and remove the temporary file
+    pclose(pipe);
+    remove("temp_script.py");
+  }
+
+  fclose(fpin);
+  close(client_socket);
 }
+
+
 void handle_request(int client_socket){
     FILE *fpin;
     char request[1024];
@@ -219,6 +334,7 @@ void handle_request(int client_socket){
     close(client_socket);
 
 }
+
 int main(int argc, char* argv[]){
     int PORT_NUMBER = atoi(argv[1]);
 
