@@ -214,22 +214,33 @@ void handle_arduino_request(int client_socket) {
   // Check if the start button was clicked
   if (strstr(request, "POST /start") != NULL) {
     // Send the game started response
-    const char *game_started_response = "<html><body>"
-                                        "<h1>Game Started</h1>"
-                                        "<p>Time remaining: <span id='timer'>60</span> seconds</p>"
-                                        "<script>"
-                                        "  var timeLeft = 60;"
-                                        "  var timer = setInterval(function() {"
-                                        "    timeLeft--;"
-                                        "    document.getElementById('timer').textContent = timeLeft;"
-                                        "    if (timeLeft <= 0) {"
-                                        "      clearInterval(timer);"
-                                        "      document.getElementById('timer').textContent = 'Time\'s up!';"
-                                        "      window.location.href = '/game-over';"
-                                        "    }"
-                                        "  }, 1000);"
-                                        "</script>"
-                                        "</body></html>";
+const char *game_started_response = "<html>\n"
+"<head></head>\n"
+"<body>\n"
+"    <h1>Game Started</h1>\n"
+"    <p>Time remaining: <span id=\"timer\">60</span> seconds</p>\n"
+"    <p>Score: <span id=\"score\"></span></p>\n"
+"    <script>\n"
+"        var timeLeft = 60;\n"
+"        var timer = setInterval(function() {\n"
+"            timeLeft--;\n"
+"            document.getElementById('timer').textContent = timeLeft;\n"
+"            if (timeLeft <= 0) {\n"
+"                clearInterval(timer);\n"
+"                document.getElementById('timer').textContent = 'Time\\'s up!';\n"
+"                updateScore();\n"
+"            }\n"
+"        }, 1000);\n"
+"        function updateScore() {\n"
+"            fetch('/get-score')\n"
+"                .then(response => response.text())\n"
+"                .then(score => {\n"
+"                    document.getElementById('score').textContent = score;\n"
+"                });\n"
+"        }\n"
+"    </script>\n"
+"</body>\n"
+"</html>";
     send_response(client_socket, "200 OK", "text/html", game_started_response);
 
     // Define the Python script
@@ -242,7 +253,7 @@ void handle_arduino_request(int client_socket) {
                                 "arduino.write(b'start\\n')  # Send the 'start' message\n"
                                 "\n"
                                 "start_time = time.time()\n"
-                                "score = '0'\n"
+                                "score = arduino.readline().decode('utf-8').strip()\n"
                                 "while (time.time() - start_time) < 60:\n"
                                 "    if arduino.in_waiting > 0:\n"
                                 "        score = arduino.readline().decode('utf-8').strip()  # Read the score\n"
@@ -271,25 +282,17 @@ void handle_arduino_request(int client_socket) {
       return;
     }
 
-    // Read the score from the Python script output
-    char score_str[16];
-    if (fgets(score_str, sizeof(score_str), pipe) != NULL) {
-      int score = atoi(score_str);
-      printf("Received score from Arduino: %d\n", score);
+// Read the score from the Python script output
+char score_str[16];
+if (fgets(score_str, sizeof(score_str), pipe) != NULL) {
+  int score = atoi(score_str);
+  printf("Received score from Arduino: %d\n", score);
 
-      // Send the game over response with the score
-      char game_over_response[1024];
-      snprintf(game_over_response, sizeof(game_over_response),
-               "<html><body>"
-               "<h1>Game Over</h1>"
-               "<p>Your score: %d</p>"
-               "<form action='/' method='GET'>"
-               "<input type='submit' value='Play Again'>"
-               "</form>"
-               "</body></html>",
-               score);
-      send_response(client_socket, "200 OK", "text/html", game_over_response);
-    } else {
+  // Update the HTML with the score
+  char score_html[256];
+  sprintf(score_html, "%d", score);
+  send_response(client_socket, "200 OK", "text/html", score_html);
+} else {
       printf("Error reading score from Python script output\n");
     }
 
