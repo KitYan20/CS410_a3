@@ -2,6 +2,8 @@
 
 ### Group Members
 Kit Yan and Mario Hysa
+### Description
+Built a simple webserver in a group of two using C to allow clients to request for certain data from a clients local server
 
 ### Testing webserv
 To test out the webserver, make sure you have a web browser service to use for client side rendering. First you need to get IP network address. You can use this this command on the terminal to get it.
